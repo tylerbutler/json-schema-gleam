@@ -1,7 +1,6 @@
 /// Types representing a parsed JSON Schema AST.
 /// These types are populated by the Elixir FFI parser and used
 /// by the code generator to produce Gleam type definitions.
-
 import gleam/dict.{type Dict}
 import gleam/option.{type Option}
 

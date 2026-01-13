@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Team",
+  "description": "A team with members",
+  "type": "object",
+  "properties": {
+    "name": { "type": "string" },
+    "members": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Member" }
+    },
+    "lead": { "$ref": "#/$defs/Member" }
+  },
+  "required": ["name", "members"],
+  "$defs": {
+    "Member": {
+      "type": "object",
+      "title": "Member",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["name"]
+    }
+  }
+}

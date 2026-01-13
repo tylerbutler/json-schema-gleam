@@ -30,9 +30,26 @@ build: deps
     cp _build/dev/lib/json_schema/ebin/*.beam build/dev/erlang/json_schema_gleam/ebin/ 2>/dev/null || true
     cp _build/dev/lib/typed_struct/ebin/*.beam build/dev/erlang/json_schema_gleam/ebin/ 2>/dev/null || true
 
-# Run tests
-test: build
+# Run all tests (Gleam + Elixir)
+test: test-elixir test-gleam
+
+# Run Elixir FFI tests only
+test-elixir: deps
+    mix test test/elixir --seed 0
+
+# Run Gleam tests only (without FFI - may fail for FFI tests)
+test-gleam-unit:
     gleam test
+
+# Run Gleam tests with FFI support via erl (includes Elixir deps)
+test-gleam: build
+    erl -noshell \
+        -pa build/dev/erlang/*/ebin \
+        -pa _build/dev/lib/*/ebin \
+        -pa "{{elixir-ebin}}" \
+        -pa "{{logger-ebin}}" \
+        -eval "gleeunit:main()" \
+        -s erlang halt
 
 # Format code
 format:

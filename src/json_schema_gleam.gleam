@@ -22,7 +22,6 @@
 /// ```sh
 /// gleam run -- schema.json output.gleam --module my_types
 /// ```
-
 import gleam/result
 import json_schema_gleam/cli
 import json_schema_gleam/codegen.{type GenerateOptions}

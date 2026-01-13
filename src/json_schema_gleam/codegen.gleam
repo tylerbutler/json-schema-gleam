@@ -1,17 +1,15 @@
 /// Code generator that transforms JSON Schema AST into Gleam source code.
 /// Produces type definitions and optionally JSON decoders.
-
 import gleam/dict
 import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
 import json_schema_gleam/schema.{
-  type SchemaNode, type SchemaResult, type SchemaType,
-  AllOfType, AnyOfType, ArrayType, BooleanType, ConstType,
-  EnumType, IntegerType, NullType, NumberType,
-  ObjectType, OneOfType, RefType, SchemaNode, SchemaResult,
-  StringType, StringValue, UnionType, UnknownType,
+  type SchemaNode, type SchemaResult, type SchemaType, AllOfType, AnyOfType,
+  ArrayType, BooleanType, ConstType, EnumType, IntegerType, NullType, NumberType,
+  ObjectType, OneOfType, RefType, SchemaNode, SchemaResult, StringType,
+  StringValue, UnionType, UnknownType,
 }
 
 /// Options for code generation
@@ -39,10 +37,7 @@ pub fn default_options(module_name: String) -> GenerateOptions {
 }
 
 /// Generate Gleam source code from a parsed schema
-pub fn generate(
-  schema: SchemaResult,
-  options: GenerateOptions,
-) -> String {
+pub fn generate(schema: SchemaResult, options: GenerateOptions) -> String {
   let imports = generate_imports(options)
   let types = generate_types(schema, options)
   let decoders = case options.generate_decoders {
@@ -84,11 +79,12 @@ fn generate_imports(options: GenerateOptions) -> String {
 }
 
 fn generate_types(schema: SchemaResult, options: GenerateOptions) -> String {
-  let root_type = generate_type_from_node(
-    schema.root,
-    root_type_name(schema.root, options),
-    options,
-  )
+  let root_type =
+    generate_type_from_node(
+      schema.root,
+      root_type_name(schema.root, options),
+      options,
+    )
 
   let def_types =
     schema.definitions
@@ -147,7 +143,14 @@ fn generate_record_type(
   let properties = dict.to_list(node.properties)
 
   case properties {
-    [] -> doc <> deprecated_doc <> "pub type " <> type_name <> " {\n  " <> type_name <> "\n}"
+    [] ->
+      doc
+      <> deprecated_doc
+      <> "pub type "
+      <> type_name
+      <> " {\n  "
+      <> type_name
+      <> "\n}"
     _ -> {
       let fields =
         properties
@@ -344,11 +347,12 @@ fn ref_to_type_name(ref: String, options: GenerateOptions) -> String {
 }
 
 fn generate_decoders(schema: SchemaResult, options: GenerateOptions) -> String {
-  let root_decoder = generate_decoder_for_node(
-    schema.root,
-    root_type_name(schema.root, options),
-    options,
-  )
+  let root_decoder =
+    generate_decoder_for_node(
+      schema.root,
+      root_type_name(schema.root, options),
+      options,
+    )
 
   let def_decoders =
     schema.definitions
@@ -399,7 +403,13 @@ fn generate_object_decoder(
           let #(name, prop_node) = pair
           let field_name = snake_case(name)
           let is_required = list.contains(node.required, name)
-          generate_field_decoder(name, field_name, prop_node, is_required, options)
+          generate_field_decoder(
+            name,
+            field_name,
+            prop_node,
+            is_required,
+            options,
+          )
         })
         |> string.join("\n")
 
@@ -469,7 +479,8 @@ fn gleam_decoder_for_type(node: SchemaNode, options: GenerateOptions) -> String 
       }
     ObjectType ->
       case node.title {
-        Some(title) -> snake_case(options.type_prefix <> pascal_case(title)) <> "_decoder"
+        Some(title) ->
+          snake_case(options.type_prefix <> pascal_case(title)) <> "_decoder"
         None -> "dynamic.dynamic"
       }
     RefType ->
@@ -508,11 +519,7 @@ fn generate_enum_decoder(
           let cases =
             string_values
             |> list.map(fn(s) {
-              "      \""
-              <> s
-              <> "\" -> Ok("
-              <> pascal_case(s)
-              <> ")"
+              "      \"" <> s <> "\" -> Ok(" <> pascal_case(s) <> ")"
             })
             |> string.join("\n")
 

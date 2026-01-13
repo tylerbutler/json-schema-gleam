@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Order",
+  "description": "An order with nested address",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "total": {
+      "type": "number"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "quantity": { "type": "integer" },
+          "price": { "type": "number" }
+        },
+        "required": ["name", "quantity"]
+      }
+    },
+    "shipping_address": {
+      "type": "object",
+      "title": "Address",
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" },
+        "postal_code": { "type": "string" },
+        "country": { "type": "string" }
+      },
+      "required": ["street", "city", "country"]
+    }
+  },
+  "required": ["id", "items"]
+}

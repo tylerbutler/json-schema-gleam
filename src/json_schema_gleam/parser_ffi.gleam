@@ -1,7 +1,6 @@
 /// FFI bindings to the Elixir JSON Schema parser.
 /// This module wraps the Elixir parser and converts the dynamic
 /// results into typed Gleam structures.
-
 import gleam/dict.{type Dict}
 import gleam/dynamic.{type DecodeError, type Dynamic}
 import gleam/list
@@ -47,12 +46,14 @@ fn decode_schema_result(dyn: Dynamic) -> Result(SchemaResult, String) {
     Ok(root_dyn), Ok(defs_dyn) -> {
       let root = decode_schema_node(root_dyn)
       let definitions = decode_definitions(defs_dyn)
-      Ok(SchemaResult(
-        root: root,
-        definitions: definitions,
-        errors: [],
-        warnings: [],
-      ))
+      Ok(
+        SchemaResult(
+          root: root,
+          definitions: definitions,
+          errors: [],
+          warnings: [],
+        ),
+      )
     }
     _, _ -> {
       // Debug: try to see what we got
@@ -75,7 +76,8 @@ fn decode_schema_node(dyn: Dynamic) -> SchemaNode {
   let description = decode_optional_string(dyn, "description")
   let properties = decode_properties(dyn)
   let required = decode_string_list(dyn, "required")
-  let additional_properties = decode_bool_field(dyn, "additional_properties", True)
+  let additional_properties =
+    decode_bool_field(dyn, "additional_properties", True)
   let items = decode_optional_node(dyn, "items")
   let enum_values = decode_enum_values(dyn)
   let const_value = decode_const_value(dyn)
@@ -125,35 +127,54 @@ fn decode_schema_node(dyn: Dynamic) -> SchemaNode {
 }
 
 fn decode_schema_type(dyn: Dynamic) -> SchemaType {
-  case get_atom_field(dyn, "type") {
-    Ok(type_dyn) -> parse_type_value(type_dyn)
-    Error(_) -> {
-      // Check for composition types
-      case get_atom_field(dyn, "one_of") {
-        Ok(_) -> OneOfType
-        Error(_) ->
-          case get_atom_field(dyn, "any_of") {
-            Ok(_) -> AnyOfType
+  // Check for enum first - enum takes precedence even if type is present
+  // (e.g., {"type": "string", "enum": ["a", "b"]} should be EnumType)
+  // But only if enum actually has values (not nil)
+  case has_non_nil_field(dyn, "enum") {
+    True -> EnumType
+    False ->
+      // Check for const next (not nil)
+      case has_non_nil_field(dyn, "const") {
+        True -> ConstType
+        False ->
+          // Now check for explicit type
+          case get_atom_field(dyn, "type") {
+            Ok(type_dyn) -> parse_type_value(type_dyn)
             Error(_) ->
-              case get_atom_field(dyn, "all_of") {
-                Ok(_) -> AllOfType
-                Error(_) ->
-                  case get_atom_field(dyn, "ref") {
-                    Ok(_) -> RefType
-                    Error(_) ->
-                      case get_atom_field(dyn, "enum") {
-                        Ok(_) -> EnumType
-                        Error(_) ->
-                          case get_atom_field(dyn, "const") {
-                            Ok(_) -> ConstType
-                            Error(_) -> UnknownType
+              // Check for composition types
+              case has_non_nil_field(dyn, "one_of") {
+                True -> OneOfType
+                False ->
+                  case has_non_nil_field(dyn, "any_of") {
+                    True -> AnyOfType
+                    False ->
+                      case has_non_nil_field(dyn, "all_of") {
+                        True -> AllOfType
+                        False ->
+                          case has_non_nil_field(dyn, "ref") {
+                            True -> RefType
+                            False -> UnknownType
                           }
                       }
                   }
               }
           }
       }
+  }
+}
+
+// Helper to check if a field exists and is not nil
+fn has_non_nil_field(dyn: Dynamic, field: String) -> Bool {
+  case get_atom_field(dyn, field) {
+    Ok(value_dyn) -> {
+      // Check if the value is nil using dynamic.optional
+      case dynamic.optional(dynamic.dynamic)(value_dyn) {
+        Ok(None) -> False
+        Ok(Some(_)) -> True
+        Error(_) -> True
+      }
     }
+    Error(_) -> False
   }
 }
 
@@ -254,12 +275,13 @@ fn decode_optional_float(dyn: Dynamic, field: String) -> Option(Float) {
 }
 
 fn int_to_float(i: Int) -> Float {
-  let assert Ok(f) = result.map(Ok(i), fn(x) {
-    case x {
-      0 -> 0.0
-      _ -> do_int_to_float(x)
-    }
-  })
+  let assert Ok(f) =
+    result.map(Ok(i), fn(x) {
+      case x {
+        0 -> 0.0
+        _ -> do_int_to_float(x)
+      }
+    })
   f
 }
 
@@ -365,9 +387,12 @@ fn decode_schema_value(dyn: Dynamic) -> SchemaValue {
                     Ok(None) -> NullValue
                     _ ->
                       case dynamic.list(dynamic.dynamic)(dyn) {
-                        Ok(items) -> ArrayValue(list.map(items, decode_schema_value))
+                        Ok(items) ->
+                          ArrayValue(list.map(items, decode_schema_value))
                         Error(_) ->
-                          case dynamic.dict(dynamic.string, dynamic.dynamic)(dyn) {
+                          case
+                            dynamic.dict(dynamic.string, dynamic.dynamic)(dyn)
+                          {
                             Ok(obj) -> {
                               let converted =
                                 dict.fold(obj, dict.new(), fn(acc, k, v) {

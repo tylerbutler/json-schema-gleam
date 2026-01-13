@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Status",
+  "description": "Status values for an order",
+  "type": "string",
+  "enum": ["pending", "processing", "shipped", "delivered", "cancelled"]
+}

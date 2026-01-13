@@ -1,5 +1,4 @@
 /// CLI module for json_schema_gleam using glint for argument parsing.
-
 import argv
 import gleam/io
 import gleam/option.{None, Some}
@@ -25,7 +24,9 @@ fn generate_command() -> glint.Command(Nil) {
   use module_name <- glint.flag(
     glint.string_flag("module")
     |> glint.flag_default("")
-    |> glint.flag_help("Module name for generated types (derived from schema title if not specified)"),
+    |> glint.flag_help(
+      "Module name for generated types (derived from schema title if not specified)",
+    ),
   )
   use no_decoders <- glint.flag(
     glint.bool_flag("no-decoders")
@@ -50,21 +51,22 @@ fn generate_command() -> glint.Command(Nil) {
         [] -> None
       }
 
-      let options = codegen.GenerateOptions(
-        module_name: case module_flag {
-          Ok(name) if name != "" -> name
-          _ -> derive_module_name(schema_path)
-        },
-        generate_decoders: case no_decoders_flag {
-          Ok(True) -> False
-          _ -> True
-        },
-        generate_encoders: False,
-        type_prefix: case prefix_flag {
-          Ok(p) -> p
-          _ -> ""
-        },
-      )
+      let options =
+        codegen.GenerateOptions(
+          module_name: case module_flag {
+            Ok(name) if name != "" -> name
+            _ -> derive_module_name(schema_path)
+          },
+          generate_decoders: case no_decoders_flag {
+            Ok(True) -> False
+            _ -> True
+          },
+          generate_encoders: False,
+          type_prefix: case prefix_flag {
+            Ok(p) -> p
+            _ -> ""
+          },
+        )
 
       case generate_code(schema_path, options) {
         Ok(code) -> {
@@ -72,7 +74,8 @@ fn generate_command() -> glint.Command(Nil) {
             Some(path) -> {
               case simplifile.write(path, code) {
                 Ok(_) -> io.println("Generated types written to " <> path)
-                Error(e) -> io.println("Error writing file: " <> string.inspect(e))
+                Error(e) ->
+                  io.println("Error writing file: " <> string.inspect(e))
               }
             }
             None -> io.println(code)
