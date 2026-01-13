@@ -1,0 +1,14 @@
+*.beam
+*.ez
+/build
+erl_crash.dump
+
+# Elixir/Mix
+/_build/
+/deps/
+*.lock
+.elixir_ls/
+
+# IDE
+.idea/
+.vscode/

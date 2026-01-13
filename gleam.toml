@@ -1,0 +1,17 @@
+name = "json_schema_gleam"
+version = "0.1.0"
+description = "Generate Gleam types from JSON Schema definitions"
+licences = ["MIT"]
+repository = { type = "github", user = "tylerbutler", repo = "json-schema-gleam" }
+
+target = "erlang"
+
+[dependencies]
+gleam_stdlib = "~> 0.56.0"
+gleam_json = "~> 2.0"
+simplifile = "~> 2.0"
+argv = "~> 1.0"
+glint = "~> 1.0"
+
+[dev-dependencies]
+gleeunit = "~> 1.0"
