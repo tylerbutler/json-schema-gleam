@@ -12,3 +12,4 @@ erl_crash.dump
 # IDE
 .idea/
 .vscode/
+.claude/settings.local.json

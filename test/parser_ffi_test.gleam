@@ -10,9 +10,8 @@ import gleeunit/should
 import json_schema_gleam/codegen
 import json_schema_gleam/parser_ffi
 import json_schema_gleam/schema.{
-  ArrayType, BooleanType, EnumType, IntegerType, NumberType, ObjectType,
-  OneOfType, RefType, SchemaNode, SchemaResult, StringType, StringValue,
-  UnionType,
+  ArrayType, BooleanType, IntegerType, NumberType, ObjectType, StringType,
+  StringValue, UnionType,
 }
 
 // Note: These tests require the Elixir FFI modules to be compiled.
