@@ -1,6 +1,7 @@
 /// CLI module for json_schema_gleam using glint for argument parsing.
 import argv
 import gleam/io
+import gleam/list
 import gleam/option.{None, Some}
 import gleam/result
 import gleam/string
@@ -10,7 +11,7 @@ import json_schema_gleam/parser_ffi
 import simplifile
 
 /// Run the CLI with command line arguments
-pub fn run() {
+pub fn run() -> Nil {
   glint.new()
   |> glint.with_name("json_schema_gleam")
   |> glint.pretty_help(glint.default_pretty_help())
@@ -45,46 +46,49 @@ fn generate_command() -> glint.Command(Nil) {
   let prefix_flag = prefix(flags)
 
   case args {
+    [] -> io.println("Error: No schema file specified")
     [schema_path, ..rest] -> {
-      let output_path = case rest {
-        [out, ..] -> Some(out)
-        [] -> None
-      }
+      let output_path = list.first(rest) |> option.from_result()
 
       let options =
         codegen.GenerateOptions(
-          module_name: case module_flag {
-            Ok(name) if name != "" -> name
-            _ -> derive_module_name(schema_path)
-          },
-          generate_decoders: case no_decoders_flag {
-            Ok(True) -> False
-            _ -> True
-          },
+          module_name: get_module_name(module_flag, schema_path),
+          generate_decoders: !result.unwrap(no_decoders_flag, False),
           generate_encoders: False,
-          type_prefix: case prefix_flag {
-            Ok(p) -> p
-            _ -> ""
-          },
+          type_prefix: result.unwrap(prefix_flag, ""),
         )
 
-      case generate_code(schema_path, options) {
-        Ok(code) -> {
-          case output_path {
-            Some(path) -> {
-              case simplifile.write(path, code) {
-                Ok(_) -> io.println("Generated types written to " <> path)
-                Error(e) ->
-                  io.println("Error writing file: " <> string.inspect(e))
-              }
-            }
-            None -> io.println(code)
-          }
-        }
-        Error(e) -> io.println("Error: " <> e)
-      }
+      handle_generate(schema_path, output_path, options)
     }
-    [] -> io.println("Error: No schema file specified")
+  }
+}
+
+fn get_module_name(
+  module_flag: Result(String, a),
+  schema_path: String,
+) -> String {
+  case module_flag {
+    Ok(name) if name != "" -> name
+    _ -> derive_module_name(schema_path)
+  }
+}
+
+fn handle_generate(
+  schema_path: String,
+  output_path: option.Option(String),
+  options: codegen.GenerateOptions,
+) -> Nil {
+  case generate_code(schema_path, options) {
+    Error(e) -> io.println("Error: " <> e)
+    Ok(code) ->
+      case output_path {
+        None -> io.println(code)
+        Some(path) ->
+          case simplifile.write(path, code) {
+            Ok(_) -> io.println("Generated types written to " <> path)
+            Error(e) -> io.println("Error writing file: " <> string.inspect(e))
+          }
+      }
   }
 }
 
@@ -99,16 +103,9 @@ fn generate_code(
 fn derive_module_name(path: String) -> String {
   path
   |> string.split("/")
-  |> last_or("")
+  |> list.last()
+  |> result.unwrap("")
   |> string.replace(".json", "")
   |> string.replace("-", "_")
   |> string.lowercase()
-}
-
-fn last_or(list: List(a), default: a) -> a {
-  case list {
-    [] -> default
-    [x] -> x
-    [_, ..rest] -> last_or(rest, default)
-  }
 }

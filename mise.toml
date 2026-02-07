@@ -1,7 +1,5 @@
 [tools]
-gleam = "1.14"
-erlang = "27"
-elixir = "1.17"
+# Versions for gleam, erlang, elixir read from .tool-versions
 just = "latest"
 
 [env]

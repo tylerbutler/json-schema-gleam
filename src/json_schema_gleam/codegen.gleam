@@ -8,8 +8,8 @@ import gleam/string
 import json_schema_gleam/schema.{
   type SchemaNode, type SchemaResult, type SchemaType, AllOfType, AnyOfType,
   ArrayType, BooleanType, ConstType, EnumType, IntegerType, NullType, NumberType,
-  ObjectType, OneOfType, RefType, SchemaNode, SchemaResult, StringType,
-  StringValue, UnionType, UnknownType,
+  ObjectType, OneOfType, RefType, StringType, StringValue, UnionType,
+  UnknownType,
 }
 
 /// Options for code generation
@@ -45,7 +45,7 @@ pub fn generate(schema: SchemaResult, options: GenerateOptions) -> String {
     False -> ""
   }
   let encoders = case options.generate_encoders {
-    True -> generate_encoders(schema, options)
+    True -> generate_encoders()
     False -> ""
   }
 
@@ -117,7 +117,7 @@ fn generate_type_from_node(
 ) -> String {
   case node.schema_type {
     ObjectType -> generate_record_type(node, type_name, options)
-    EnumType -> generate_enum_type(node, type_name, options)
+    EnumType -> generate_enum_type(node, type_name)
     ArrayType -> generate_array_type_alias(node, type_name, options)
     OneOfType -> generate_union_type(node, type_name, options)
     AnyOfType -> generate_union_type(node, type_name, options)
@@ -180,19 +180,15 @@ fn generate_record_type(
   }
 }
 
-fn generate_enum_type(
-  node: SchemaNode,
-  type_name: String,
-  options: GenerateOptions,
-) -> String {
+fn generate_enum_type(node: SchemaNode, type_name: String) -> String {
   case node.enum_values {
+    None -> ""
     Some(values) -> {
       let doc = case node.description {
         Some(desc) -> "/// " <> desc <> "\n"
         None -> ""
       }
 
-      // Check if all values are strings (common case for enums)
       let string_values =
         values
         |> list.filter_map(fn(v) {
@@ -202,27 +198,23 @@ fn generate_enum_type(
           }
         })
 
-      case list.length(string_values) == list.length(values) {
-        True -> {
-          let variants =
-            string_values
-            |> list.map(fn(s) { "  " <> pascal_case(s) })
-            |> string.join("\n")
-          doc <> "pub type " <> type_name <> " {\n" <> variants <> "\n}"
-        }
-        False -> {
-          // Mixed types - generate a more generic union
-          let variants =
-            values
-            |> list.index_map(fn(v, i) {
-              "  " <> type_name <> "Variant" <> int.to_string(i)
-            })
-            |> string.join("\n")
-          doc <> "pub type " <> type_name <> " {\n" <> variants <> "\n}"
-        }
+      let all_strings = list.length(string_values) == list.length(values)
+
+      let variants = case all_strings {
+        True ->
+          string_values
+          |> list.map(fn(s) { "  " <> pascal_case(s) })
+          |> string.join("\n")
+        False ->
+          values
+          |> list.index_map(fn(_v, i) {
+            "  " <> type_name <> "Variant" <> int.to_string(i)
+          })
+          |> string.join("\n")
       }
+
+      doc <> "pub type " <> type_name <> " {\n" <> variants <> "\n}"
     }
-    None -> ""
   }
 }
 
@@ -374,7 +366,7 @@ fn generate_decoder_for_node(
 ) -> String {
   case node.schema_type {
     ObjectType -> generate_object_decoder(node, type_name, options)
-    EnumType -> generate_enum_decoder(node, type_name, options)
+    EnumType -> generate_enum_decoder(node, type_name)
     _ -> ""
   }
 }
@@ -496,14 +488,11 @@ fn gleam_decoder_for_type(node: SchemaNode, options: GenerateOptions) -> String 
   }
 }
 
-fn generate_enum_decoder(
-  node: SchemaNode,
-  type_name: String,
-  options: GenerateOptions,
-) -> String {
+fn generate_enum_decoder(node: SchemaNode, type_name: String) -> String {
   let fn_name = snake_case(type_name) <> "_decoder"
 
   case node.enum_values {
+    None -> ""
     Some(values) -> {
       let string_values =
         values
@@ -514,7 +503,10 @@ fn generate_enum_decoder(
           }
         })
 
-      case list.length(string_values) == list.length(values) {
+      let all_strings = list.length(string_values) == list.length(values)
+
+      case all_strings {
+        False -> ""
         True -> {
           let cases =
             string_values
@@ -533,14 +525,12 @@ fn generate_enum_decoder(
           <> type_name
           <> "\", found: s, path: [])])\n    }\n    Error(e) -> Error(e)\n  }\n}"
         }
-        False -> ""
       }
     }
-    None -> ""
   }
 }
 
-fn generate_encoders(schema: SchemaResult, options: GenerateOptions) -> String {
+fn generate_encoders() -> String {
   // TODO: Implement encoders if needed
   ""
 }
