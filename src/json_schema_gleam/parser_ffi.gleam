@@ -178,7 +178,8 @@ fn string_to_schema_type(s: String) -> SchemaType {
 
 fn decode_string_field(dyn: Dynamic, field: String, default: String) -> String {
   case get_atom_field(dyn, field) {
-    Ok(value_dyn) -> result.unwrap(decode.run(value_dyn, decode.string), default)
+    Ok(value_dyn) ->
+      result.unwrap(decode.run(value_dyn, decode.string), default)
     Error(_) -> default
   }
 }
