@@ -3,6 +3,7 @@
 /// results into typed Gleam structures.
 import gleam/dict.{type Dict}
 import gleam/dynamic.{type Dynamic}
+import gleam/dynamic/decode
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -134,7 +135,7 @@ fn has_non_nil_field(dyn: Dynamic, field: String) -> Bool {
   case get_atom_field(dyn, field) {
     Error(_) -> False
     Ok(value_dyn) ->
-      case dynamic.optional(dynamic.dynamic)(value_dyn) {
+      case decode.run(value_dyn, decode.optional(decode.dynamic)) {
         Ok(None) -> False
         Ok(Some(_)) -> True
         Error(_) -> True
@@ -143,14 +144,20 @@ fn has_non_nil_field(dyn: Dynamic, field: String) -> Bool {
 }
 
 fn parse_type_value(dyn: Dynamic) -> SchemaType {
-  case dynamic.string(dyn) {
+  case decode.run(dyn, decode.string) {
     Ok(type_str) -> string_to_schema_type(type_str)
     Error(_) -> parse_union_type(dyn)
   }
 }
 
 fn parse_union_type(dyn: Dynamic) -> SchemaType {
-  case dynamic.tuple2(dynamic.string, dynamic.list(dynamic.string))(dyn) {
+  // Try to decode as a tuple with ("union", [types...])
+  let decoder = {
+    use tag <- decode.field(0, decode.string)
+    use types <- decode.field(1, decode.list(decode.string))
+    decode.success(#(tag, types))
+  }
+  case decode.run(dyn, decoder) {
     Ok(#("union", types)) -> UnionType(list.map(types, string_to_schema_type))
     _ -> UnknownType
   }
@@ -171,28 +178,28 @@ fn string_to_schema_type(s: String) -> SchemaType {
 
 fn decode_string_field(dyn: Dynamic, field: String, default: String) -> String {
   case get_atom_field(dyn, field) {
-    Ok(value_dyn) -> result.unwrap(dynamic.string(value_dyn), default)
+    Ok(value_dyn) -> result.unwrap(decode.run(value_dyn, decode.string), default)
     Error(_) -> default
   }
 }
 
 fn decode_bool_field(dyn: Dynamic, field: String, default: Bool) -> Bool {
   case get_atom_field(dyn, field) {
-    Ok(value_dyn) -> result.unwrap(dynamic.bool(value_dyn), default)
+    Ok(value_dyn) -> result.unwrap(decode.run(value_dyn, decode.bool), default)
     Error(_) -> default
   }
 }
 
 fn decode_optional_string(dyn: Dynamic, field: String) -> Option(String) {
   case get_atom_field(dyn, field) {
-    Ok(value_dyn) -> option.from_result(dynamic.string(value_dyn))
+    Ok(value_dyn) -> option.from_result(decode.run(value_dyn, decode.string))
     Error(_) -> None
   }
 }
 
 fn decode_optional_int(dyn: Dynamic, field: String) -> Option(Int) {
   case get_atom_field(dyn, field) {
-    Ok(value_dyn) -> option.from_result(dynamic.int(value_dyn))
+    Ok(value_dyn) -> option.from_result(decode.run(value_dyn, decode.int))
     Error(_) -> None
   }
 }
@@ -200,11 +207,11 @@ fn decode_optional_int(dyn: Dynamic, field: String) -> Option(Int) {
 fn decode_optional_float(dyn: Dynamic, field: String) -> Option(Float) {
   case get_atom_field(dyn, field) {
     Ok(value_dyn) ->
-      case dynamic.float(value_dyn) {
+      case decode.run(value_dyn, decode.float) {
         Ok(f) -> Some(f)
         Error(_) ->
           // Try int and convert to float
-          case dynamic.int(value_dyn) {
+          case decode.run(value_dyn, decode.int) {
             Ok(i) -> Some(int.to_float(i))
             Error(_) -> None
           }
@@ -215,7 +222,8 @@ fn decode_optional_float(dyn: Dynamic, field: String) -> Option(Float) {
 
 fn decode_string_list(dyn: Dynamic, field: String) -> List(String) {
   case get_atom_field(dyn, field) {
-    Ok(list_dyn) -> result.unwrap(dynamic.list(dynamic.string)(list_dyn), [])
+    Ok(list_dyn) ->
+      result.unwrap(decode.run(list_dyn, decode.list(decode.string)), [])
     Error(_) -> []
   }
 }
@@ -228,7 +236,7 @@ fn decode_properties(dyn: Dynamic) -> Dict(String, SchemaNode) {
 }
 
 fn decode_property_map(dyn: Dynamic) -> Dict(String, SchemaNode) {
-  case dynamic.dict(dynamic.string, dynamic.dynamic)(dyn) {
+  case decode.run(dyn, decode.dict(decode.string, decode.dynamic)) {
     Ok(raw_dict) ->
       dict.fold(raw_dict, dict.new(), fn(acc, key, value) {
         dict.insert(acc, key, decode_schema_node(value))
@@ -241,7 +249,7 @@ fn decode_optional_node(dyn: Dynamic, field: String) -> Option(SchemaNode) {
   case get_atom_field(dyn, field) {
     Error(_) -> None
     Ok(node_dyn) ->
-      case dynamic.optional(dynamic.dynamic)(node_dyn) {
+      case decode.run(node_dyn, decode.optional(decode.dynamic)) {
         Ok(Some(inner)) -> Some(decode_schema_node(inner))
         Ok(None) -> None
         Error(_) -> Some(decode_schema_node(node_dyn))
@@ -256,7 +264,7 @@ fn decode_optional_node_list(
   case get_atom_field(dyn, field) {
     Error(_) -> None
     Ok(list_dyn) ->
-      case dynamic.list(dynamic.dynamic)(list_dyn) {
+      case decode.run(list_dyn, decode.list(decode.dynamic)) {
         Ok(items) -> Some(list.map(items, decode_schema_node))
         Error(_) -> None
       }
@@ -267,7 +275,7 @@ fn decode_enum_values(dyn: Dynamic) -> Option(List(SchemaValue)) {
   case get_atom_field(dyn, "enum") {
     Error(_) -> None
     Ok(list_dyn) ->
-      case dynamic.list(dynamic.dynamic)(list_dyn) {
+      case decode.run(list_dyn, decode.list(decode.dynamic)) {
         Ok(values) -> Some(list.map(values, decode_schema_value))
         Error(_) -> None
       }
@@ -291,28 +299,28 @@ fn decode_default_value(dyn: Dynamic) -> Option(SchemaValue) {
 /// Decode a schema value, trying each type in order
 fn decode_schema_value(dyn: Dynamic) -> SchemaValue {
   // Try string first (most common)
-  case dynamic.string(dyn) {
+  case decode.run(dyn, decode.string) {
     Ok(s) -> StringValue(s)
     Error(_) -> decode_schema_value_non_string(dyn)
   }
 }
 
 fn decode_schema_value_non_string(dyn: Dynamic) -> SchemaValue {
-  case dynamic.int(dyn) {
+  case decode.run(dyn, decode.int) {
     Ok(i) -> IntValue(i)
     Error(_) -> decode_schema_value_non_int(dyn)
   }
 }
 
 fn decode_schema_value_non_int(dyn: Dynamic) -> SchemaValue {
-  case dynamic.float(dyn) {
+  case decode.run(dyn, decode.float) {
     Ok(f) -> FloatValue(f)
     Error(_) -> decode_schema_value_non_float(dyn)
   }
 }
 
 fn decode_schema_value_non_float(dyn: Dynamic) -> SchemaValue {
-  case dynamic.bool(dyn) {
+  case decode.run(dyn, decode.bool) {
     Ok(b) -> BoolValue(b)
     Error(_) -> decode_schema_value_complex(dyn)
   }
@@ -320,21 +328,21 @@ fn decode_schema_value_non_float(dyn: Dynamic) -> SchemaValue {
 
 fn decode_schema_value_complex(dyn: Dynamic) -> SchemaValue {
   // Check for null
-  case dynamic.optional(dynamic.dynamic)(dyn) {
+  case decode.run(dyn, decode.optional(decode.dynamic)) {
     Ok(None) -> NullValue
     _ -> decode_schema_value_array_or_object(dyn)
   }
 }
 
 fn decode_schema_value_array_or_object(dyn: Dynamic) -> SchemaValue {
-  case dynamic.list(dynamic.dynamic)(dyn) {
+  case decode.run(dyn, decode.list(decode.dynamic)) {
     Ok(items) -> ArrayValue(list.map(items, decode_schema_value))
     Error(_) -> decode_schema_value_object(dyn)
   }
 }
 
 fn decode_schema_value_object(dyn: Dynamic) -> SchemaValue {
-  case dynamic.dict(dynamic.string, dynamic.dynamic)(dyn) {
+  case decode.run(dyn, decode.dict(decode.string, decode.dynamic)) {
     Ok(obj) -> {
       let converted =
         dict.fold(obj, dict.new(), fn(acc, k, v) {
@@ -347,7 +355,7 @@ fn decode_schema_value_object(dyn: Dynamic) -> SchemaValue {
 }
 
 fn decode_definitions(dyn: Dynamic) -> Dict(String, SchemaNode) {
-  case dynamic.dict(dynamic.string, dynamic.dynamic)(dyn) {
+  case decode.run(dyn, decode.dict(decode.string, decode.dynamic)) {
     Ok(raw_dict) ->
       dict.fold(raw_dict, dict.new(), fn(acc, key, value) {
         dict.insert(acc, key, decode_schema_node(value))
