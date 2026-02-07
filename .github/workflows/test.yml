@@ -12,15 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: erlef/setup-beam@v1
-        with:
-          otp-version: "27"
-          gleam-version: "1.7.0"
-          rebar3-version: "3"
-          elixir-version: "1.17"
-      - uses: extractions/setup-just@v2
-      - name: Install dependencies
-        run: just deps
+      - uses: tylerbutler/actions/setup-gleam@main
       - name: Build
         run: just build
       - name: Run tests
