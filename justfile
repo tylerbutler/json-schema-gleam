@@ -69,6 +69,10 @@ clean:
 # Run full CI pipeline
 ci: deps lint build test
 
+# CI parity recipes
+alias pr := ci
+main: ci docs
+
 # Get Elixir ebin path
 elixir-ebin := `elixir -e "IO.puts(Path.join([:code.lib_dir(:elixir), \"ebin\"]))"`
 logger-ebin := `elixir -e "IO.puts(Path.join([:code.lib_dir(:logger), \"ebin\"]))"`
