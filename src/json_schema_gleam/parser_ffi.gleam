@@ -38,9 +38,7 @@ fn do_parse_file(path: String) -> Result(Dynamic, String)
 fn do_parse_string(json: String) -> Result(Dynamic, String)
 
 /// Decode the dynamic result from Elixir into typed Gleam structures
-fn decode_schema_result(
-  dyn: Dynamic,
-) -> Result(SchemaResult, JsonSchemaError) {
+fn decode_schema_result(dyn: Dynamic) -> Result(SchemaResult, JsonSchemaError) {
   case get_atom_field(dyn, "root"), get_atom_field(dyn, "definitions") {
     Ok(root_dyn), Ok(defs_dyn) ->
       Ok(
@@ -54,7 +52,7 @@ fn decode_schema_result(
     _, _ ->
       Error(ParseError(
         detail: "Failed to decode schema result structure. Got: "
-          <> dynamic.classify(dyn),
+        <> dynamic.classify(dyn),
       ))
   }
 }
@@ -94,45 +92,35 @@ fn decode_schema_node(dyn: Dynamic) -> SchemaNode {
 }
 
 fn decode_schema_type(dyn: Dynamic) -> SchemaType {
-  // Check for enum first - enum takes precedence even if type is present
   case has_non_nil_field(dyn, "enum") {
     True -> EnumType
-    False -> decode_schema_type_without_enum(dyn)
-  }
-}
-
-fn decode_schema_type_without_enum(dyn: Dynamic) -> SchemaType {
-  // Check for const (not nil)
-  case has_non_nil_field(dyn, "const") {
-    True -> ConstType
-    False -> decode_schema_type_from_type_field(dyn)
-  }
-}
-
-fn decode_schema_type_from_type_field(dyn: Dynamic) -> SchemaType {
-  case get_atom_field(dyn, "type") {
-    Ok(type_dyn) -> parse_type_value(type_dyn)
-    Error(_) -> decode_composition_type(dyn)
+    False ->
+      case has_non_nil_field(dyn, "const") {
+        True -> ConstType
+        False ->
+          case get_atom_field(dyn, "type") {
+            Ok(type_dyn) -> parse_type_value(type_dyn)
+            Error(_) -> decode_composition_type(dyn)
+          }
+      }
   }
 }
 
 fn decode_composition_type(dyn: Dynamic) -> SchemaType {
-  case has_non_nil_field(dyn, "one_of") {
-    True -> OneOfType
-    False ->
-      case has_non_nil_field(dyn, "any_of") {
-        True -> AnyOfType
-        False ->
-          case has_non_nil_field(dyn, "all_of") {
-            True -> AllOfType
-            False ->
-              case has_non_nil_field(dyn, "ref") {
-                True -> RefType
-                False -> UnknownType
-              }
-          }
-      }
-  }
+  let checks = [
+    #("one_of", OneOfType),
+    #("any_of", AnyOfType),
+    #("all_of", AllOfType),
+    #("ref", RefType),
+  ]
+  list.find_map(checks, fn(pair) {
+    let #(field, schema_type) = pair
+    case has_non_nil_field(dyn, field) {
+      True -> Ok(schema_type)
+      False -> Error(Nil)
+    }
+  })
+  |> result.unwrap(UnknownType)
 }
 
 /// Check if a field exists and is not nil
@@ -302,60 +290,35 @@ fn decode_default_value(dyn: Dynamic) -> Option(SchemaValue) {
   }
 }
 
-/// Decode a schema value, trying each type in order
+/// Decode a schema value using one_of to try each type in order
 fn decode_schema_value(dyn: Dynamic) -> SchemaValue {
-  // Try string first (most common)
-  case decode.run(dyn, decode.string) {
-    Ok(s) -> StringValue(s)
-    Error(_) -> decode_schema_value_non_string(dyn)
-  }
-}
-
-fn decode_schema_value_non_string(dyn: Dynamic) -> SchemaValue {
-  case decode.run(dyn, decode.int) {
-    Ok(i) -> IntValue(i)
-    Error(_) -> decode_schema_value_non_int(dyn)
-  }
-}
-
-fn decode_schema_value_non_int(dyn: Dynamic) -> SchemaValue {
-  case decode.run(dyn, decode.float) {
-    Ok(f) -> FloatValue(f)
-    Error(_) -> decode_schema_value_non_float(dyn)
-  }
-}
-
-fn decode_schema_value_non_float(dyn: Dynamic) -> SchemaValue {
-  case decode.run(dyn, decode.bool) {
-    Ok(b) -> BoolValue(b)
-    Error(_) -> decode_schema_value_complex(dyn)
-  }
-}
-
-fn decode_schema_value_complex(dyn: Dynamic) -> SchemaValue {
-  // Check for null
-  case decode.run(dyn, decode.optional(decode.dynamic)) {
-    Ok(None) -> NullValue
-    _ -> decode_schema_value_array_or_object(dyn)
-  }
-}
-
-fn decode_schema_value_array_or_object(dyn: Dynamic) -> SchemaValue {
-  case decode.run(dyn, decode.list(decode.dynamic)) {
-    Ok(items) -> ArrayValue(list.map(items, decode_schema_value))
-    Error(_) -> decode_schema_value_object(dyn)
-  }
-}
-
-fn decode_schema_value_object(dyn: Dynamic) -> SchemaValue {
-  case decode.run(dyn, decode.dict(decode.string, decode.dynamic)) {
-    Ok(obj) -> {
-      let converted =
-        dict.fold(obj, dict.new(), fn(acc, k, v) {
-          dict.insert(acc, k, decode_schema_value(v))
-        })
-      ObjectValue(converted)
-    }
+  let decoder =
+    decode.one_of(decode.string |> decode.map(StringValue), [
+      decode.int |> decode.map(IntValue),
+      decode.float |> decode.map(FloatValue),
+      decode.bool |> decode.map(BoolValue),
+      decode.optional(decode.dynamic)
+        |> decode.map(fn(opt) {
+          case opt {
+            None -> NullValue
+            _ -> NullValue
+          }
+        }),
+      decode.list(decode.dynamic)
+        |> decode.map(fn(items) {
+          ArrayValue(list.map(items, decode_schema_value))
+        }),
+      decode.dict(decode.string, decode.dynamic)
+        |> decode.map(fn(obj) {
+          ObjectValue(
+            dict.fold(obj, dict.new(), fn(acc, k, v) {
+              dict.insert(acc, k, decode_schema_value(v))
+            }),
+          )
+        }),
+    ])
+  case decode.run(dyn, decoder) {
+    Ok(value) -> value
     Error(_) -> NullValue
   }
 }
