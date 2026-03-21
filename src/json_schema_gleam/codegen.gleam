@@ -113,7 +113,7 @@ fn generate_types(schema: SchemaResult, options: GenerateOptions) -> String {
 }
 
 fn root_type_name(node: SchemaNode, options: GenerateOptions) -> String {
-  case node.title {
+  case node.metadata.title {
     Some(title) -> options.type_prefix <> utils.pascal_case(title)
     None ->
       case options.module_name {
@@ -147,18 +147,18 @@ fn generate_record_type(
   type_name: String,
   options: GenerateOptions,
 ) -> StringTree {
-  let doc = case node.description {
+  let doc = case node.metadata.description {
     Some(desc) ->
       string_tree.from_string("/// " <> sanitize_comment(desc) <> "\n")
     None -> string_tree.new()
   }
 
-  let deprecated_doc = case node.deprecated {
+  let deprecated_doc = case node.metadata.deprecated {
     True -> string_tree.from_string("/// @deprecated\n")
     False -> string_tree.new()
   }
 
-  let properties = dict.to_list(node.properties)
+  let properties = dict.to_list(node.structure.properties)
 
   case properties {
     [] ->
@@ -176,7 +176,7 @@ fn generate_record_type(
           let #(name, prop_node) = pair
           let field_name = utils.snake_case(name)
           let field_type = node_to_gleam_type(prop_node, options)
-          let is_required = list.contains(node.required, name)
+          let is_required = list.contains(node.structure.required, name)
           let final_type = case is_required {
             True -> field_type
             False -> "Option(" <> field_type <> ")"
@@ -199,10 +199,10 @@ fn generate_record_type(
 }
 
 fn generate_enum_type(node: SchemaNode, type_name: String) -> StringTree {
-  case node.enum_values {
+  case node.structure.enum_values {
     None -> string_tree.new()
     Some(values) -> {
-      let doc = case node.description {
+      let doc = case node.metadata.description {
         Some(desc) ->
           string_tree.from_string("/// " <> sanitize_comment(desc) <> "\n")
         None -> string_tree.new()
@@ -251,7 +251,7 @@ fn generate_array_type_alias(
   type_name: String,
   options: GenerateOptions,
 ) -> StringTree {
-  case node.items {
+  case node.structure.items {
     Some(items_node) -> {
       let item_type = node_to_gleam_type(items_node, options)
       string_tree.from_string("pub type ")
@@ -272,10 +272,10 @@ fn generate_union_type(
   type_name: String,
   options: GenerateOptions,
 ) -> StringTree {
-  let variants = case node.one_of {
+  let variants = case node.structure.one_of {
     Some(nodes) -> nodes
     None ->
-      case node.any_of {
+      case node.structure.any_of {
         Some(nodes) -> nodes
         None -> []
       }
@@ -284,7 +284,7 @@ fn generate_union_type(
   case variants {
     [] -> string_tree.new()
     _ -> {
-      let doc = case node.description {
+      let doc = case node.metadata.description {
         Some(desc) ->
           string_tree.from_string("/// " <> sanitize_comment(desc) <> "\n")
         None -> string_tree.new()
@@ -293,7 +293,7 @@ fn generate_union_type(
       let variant_defs =
         variants
         |> list.index_map(fn(variant_node, i) {
-          let variant_name = case variant_node.title {
+          let variant_name = case variant_node.metadata.title {
             Some(title) -> utils.pascal_case(title)
             None -> type_name <> "Variant" <> int.to_string(i)
           }
@@ -320,26 +320,26 @@ fn node_to_gleam_type(node: SchemaNode, options: GenerateOptions) -> String {
     BooleanType -> "Bool"
     NullType -> "Nil"
     ArrayType ->
-      case node.items {
+      case node.structure.items {
         Some(items) -> "List(" <> node_to_gleam_type(items, options) <> ")"
         None -> "List(Dynamic)"
       }
     ObjectType ->
-      case node.title {
+      case node.metadata.title {
         Some(title) -> options.type_prefix <> utils.pascal_case(title)
         None ->
-          case derive_type_name_from_path(node.path) {
+          case derive_type_name_from_path(node.metadata.path) {
             Ok(name) -> options.type_prefix <> name
             Error(_) -> "Dynamic"
           }
       }
     RefType ->
-      case node.ref {
+      case node.structure.ref {
         Some(ref) -> ref_to_type_name(ref, options)
         None -> "Dynamic"
       }
     EnumType ->
-      case node.title {
+      case node.metadata.title {
         Some(title) -> options.type_prefix <> utils.pascal_case(title)
         None -> "String"
       }
@@ -352,7 +352,7 @@ fn node_to_gleam_type(node: SchemaNode, options: GenerateOptions) -> String {
       }
     }
     OneOfType | AnyOfType | AllOfType ->
-      case node.title {
+      case node.metadata.title {
         Some(title) -> options.type_prefix <> utils.pascal_case(title)
         None -> "Dynamic"
       }
@@ -436,7 +436,7 @@ fn generate_object_decoder(
   options: GenerateOptions,
 ) -> StringTree {
   let fn_name = utils.snake_case(type_name) <> "_decoder"
-  let properties = dict.to_list(node.properties)
+  let properties = dict.to_list(node.structure.properties)
 
   case properties {
     [] ->
@@ -455,7 +455,7 @@ fn generate_object_decoder(
         |> list.map(fn(pair) {
           let #(name, prop_node) = pair
           let field_name = utils.snake_case(name)
-          let is_required = list.contains(node.required, name)
+          let is_required = list.contains(node.structure.required, name)
           generate_field_decoder(
             name,
             field_name,
@@ -529,25 +529,25 @@ fn gleam_decoder_for_type(node: SchemaNode, options: GenerateOptions) -> String 
     NumberType -> "dynamic.float"
     BooleanType -> "dynamic.bool"
     ArrayType ->
-      case node.items {
+      case node.structure.items {
         Some(items) ->
           "dynamic.list(" <> gleam_decoder_for_type(items, options) <> ")"
         None -> "dynamic.list(dynamic.dynamic)"
       }
     ObjectType ->
-      case node.title {
+      case node.metadata.title {
         Some(title) ->
           utils.snake_case(options.type_prefix <> utils.pascal_case(title))
           <> "_decoder"
         None ->
-          case derive_type_name_from_path(node.path) {
+          case derive_type_name_from_path(node.metadata.path) {
             Ok(name) ->
               utils.snake_case(options.type_prefix <> name) <> "_decoder"
             Error(_) -> "dynamic.dynamic"
           }
       }
     RefType ->
-      case node.ref {
+      case node.structure.ref {
         Some(ref) -> {
           let type_name = ref_to_type_name(ref, options)
           utils.snake_case(type_name) <> "_decoder"
@@ -562,7 +562,7 @@ fn gleam_decoder_for_type(node: SchemaNode, options: GenerateOptions) -> String 
 fn generate_enum_decoder(node: SchemaNode, type_name: String) -> StringTree {
   let fn_name = utils.snake_case(type_name) <> "_decoder"
 
-  case node.enum_values {
+  case node.structure.enum_values {
     None -> string_tree.new()
     Some(values) -> {
       let string_values =
@@ -764,16 +764,16 @@ fn collect_inline_types(
   node: SchemaNode,
   options: GenerateOptions,
 ) -> List(StringTree) {
-  node.properties
+  node.structure.properties
   |> dict.to_list()
   |> list.flat_map(fn(pair) {
     let #(_, prop_node) = pair
     case prop_node.schema_type {
       ObjectType ->
-        case prop_node.title {
+        case prop_node.metadata.title {
           Some(_) -> []
           None ->
-            case derive_type_name_from_path(prop_node.path) {
+            case derive_type_name_from_path(prop_node.metadata.path) {
               Ok(name) -> {
                 let type_name = options.type_prefix <> name
                 let type_def =
@@ -795,16 +795,16 @@ fn collect_inline_decoders(
   node: SchemaNode,
   options: GenerateOptions,
 ) -> List(StringTree) {
-  node.properties
+  node.structure.properties
   |> dict.to_list()
   |> list.flat_map(fn(pair) {
     let #(_, prop_node) = pair
     case prop_node.schema_type {
       ObjectType ->
-        case prop_node.title {
+        case prop_node.metadata.title {
           Some(_) -> []
           None ->
-            case derive_type_name_from_path(prop_node.path) {
+            case derive_type_name_from_path(prop_node.metadata.path) {
               Ok(name) -> {
                 let type_name = options.type_prefix <> name
                 let decoder =

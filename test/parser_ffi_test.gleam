@@ -34,8 +34,8 @@ pub fn parse_simple_object_file_test() {
   let root = schema_result.root
 
   // Verify basic structure
-  root.title |> should.equal(Some("Person"))
-  root.description |> should.equal(Some("A person record"))
+  root.metadata.title |> should.equal(Some("Person"))
+  root.metadata.description |> should.equal(Some("A person record"))
 
   // Verify type detection
   case root.schema_type {
@@ -44,21 +44,21 @@ pub fn parse_simple_object_file_test() {
   }
 
   // Verify properties exist
-  dict.has_key(root.properties, "name") |> should.be_true()
-  dict.has_key(root.properties, "age") |> should.be_true()
-  dict.has_key(root.properties, "email") |> should.be_true()
+  dict.has_key(root.structure.properties, "name") |> should.be_true()
+  dict.has_key(root.structure.properties, "age") |> should.be_true()
+  dict.has_key(root.structure.properties, "email") |> should.be_true()
 
   // Verify required field
-  list.contains(root.required, "name") |> should.be_true()
+  list.contains(root.structure.required, "name") |> should.be_true()
 
   // Verify property types
-  let assert Ok(name_prop) = dict.get(root.properties, "name")
+  let assert Ok(name_prop) = dict.get(root.structure.properties, "name")
   case name_prop.schema_type {
     StringType -> should.be_true(True)
     _ -> should.fail()
   }
 
-  let assert Ok(age_prop) = dict.get(root.properties, "age")
+  let assert Ok(age_prop) = dict.get(root.structure.properties, "age")
   case age_prop.schema_type {
     IntegerType -> should.be_true(True)
     _ -> should.fail()
@@ -73,10 +73,10 @@ pub fn parse_enum_file_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  root.title |> should.equal(Some("Status"))
+  root.metadata.title |> should.equal(Some("Status"))
 
   // Check for enum values
-  case root.enum_values {
+  case root.structure.enum_values {
     Some(values) -> {
       list.length(values) |> should.equal(5)
       list.contains(values, StringValue("pending")) |> should.be_true()
@@ -94,7 +94,7 @@ pub fn parse_array_file_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  root.title |> should.equal(Some("Tags"))
+  root.metadata.title |> should.equal(Some("Tags"))
 
   case root.schema_type {
     ArrayType -> should.be_true(True)
@@ -102,7 +102,7 @@ pub fn parse_array_file_test() {
   }
 
   // Check items schema
-  case root.items {
+  case root.structure.items {
     Some(items_node) -> {
       case items_node.schema_type {
         StringType -> should.be_true(True)
@@ -113,9 +113,9 @@ pub fn parse_array_file_test() {
   }
 
   // Check array constraints
-  root.min_items |> should.equal(Some(1))
-  root.max_items |> should.equal(Some(10))
-  root.unique_items |> should.be_true()
+  root.validation.min_items |> should.equal(Some(1))
+  root.validation.max_items |> should.equal(Some(10))
+  root.validation.unique_items |> should.be_true()
 }
 
 pub fn parse_nested_object_file_test() {
@@ -126,22 +126,22 @@ pub fn parse_nested_object_file_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  root.title |> should.equal(Some("Order"))
+  root.metadata.title |> should.equal(Some("Order"))
 
   // Check items array property
-  let assert Ok(items_prop) = dict.get(root.properties, "items")
+  let assert Ok(items_prop) = dict.get(root.structure.properties, "items")
   case items_prop.schema_type {
     ArrayType -> should.be_true(True)
     _ -> should.fail()
   }
 
   // Check nested address property
-  let assert Ok(address_prop) = dict.get(root.properties, "shipping_address")
+  let assert Ok(address_prop) = dict.get(root.structure.properties, "shipping_address")
   case address_prop.schema_type {
     ObjectType -> should.be_true(True)
     _ -> should.fail()
   }
-  address_prop.title |> should.equal(Some("Address"))
+  address_prop.metadata.title |> should.equal(Some("Address"))
 }
 
 pub fn parse_union_type_file_test() {
@@ -152,7 +152,7 @@ pub fn parse_union_type_file_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  root.title |> should.equal(Some("NullableString"))
+  root.metadata.title |> should.equal(Some("NullableString"))
 
   // Should be detected as a union type
   case root.schema_type {
@@ -171,15 +171,15 @@ pub fn parse_one_of_file_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  root.title |> should.equal(Some("PaymentMethod"))
+  root.metadata.title |> should.equal(Some("PaymentMethod"))
 
-  case root.one_of {
+  case root.structure.one_of {
     Some(variants) -> {
       list.length(variants) |> should.equal(2)
 
       let first = list.first(variants)
       case first {
-        Ok(node) -> node.title |> should.equal(Some("CreditCard"))
+        Ok(node) -> node.metadata.title |> should.equal(Some("CreditCard"))
         Error(_) -> should.fail()
       }
     }
@@ -195,11 +195,11 @@ pub fn parse_refs_file_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  root.title |> should.equal(Some("Team"))
+  root.metadata.title |> should.equal(Some("Team"))
 
   // Check that lead property has a ref
-  let assert Ok(lead_prop) = dict.get(root.properties, "lead")
-  lead_prop.ref |> should.equal(Some("#/$defs/Member"))
+  let assert Ok(lead_prop) = dict.get(root.structure.properties, "lead")
+  lead_prop.structure.ref |> should.equal(Some("#/$defs/Member"))
 
   // Check definitions were extracted
   dict.has_key(schema_result.definitions, "Member") |> should.be_true()
@@ -227,20 +227,20 @@ pub fn parse_simple_object_string_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  root.title |> should.equal(Some("User"))
+  root.metadata.title |> should.equal(Some("User"))
 
   case root.schema_type {
     ObjectType -> should.be_true(True)
     _ -> should.fail()
   }
 
-  let assert Ok(username_prop) = dict.get(root.properties, "username")
+  let assert Ok(username_prop) = dict.get(root.structure.properties, "username")
   case username_prop.schema_type {
     StringType -> should.be_true(True)
     _ -> should.fail()
   }
 
-  let assert Ok(active_prop) = dict.get(root.properties, "active")
+  let assert Ok(active_prop) = dict.get(root.structure.properties, "active")
   case active_prop.schema_type {
     BooleanType -> should.be_true(True)
     _ -> should.fail()
@@ -261,7 +261,7 @@ pub fn parse_enum_string_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  case root.enum_values {
+  case root.structure.enum_values {
     Some(values) -> {
       list.length(values) |> should.equal(3)
       list.contains(values, StringValue("red")) |> should.be_true()
@@ -290,8 +290,8 @@ pub fn parse_array_string_test() {
     _ -> should.fail()
   }
 
-  root.min_items |> should.equal(Some(0))
-  root.max_items |> should.equal(Some(100))
+  root.validation.min_items |> should.equal(Some(0))
+  root.validation.max_items |> should.equal(Some(100))
 }
 
 pub fn parse_const_value_string_test() {
@@ -303,7 +303,7 @@ pub fn parse_const_value_string_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  case root.const_value {
+  case root.structure.const_value {
     Some(StringValue(val)) -> val |> should.equal("fixed_value")
     _ -> should.fail()
   }
@@ -328,8 +328,8 @@ pub fn parse_numeric_constraints_string_test() {
     _ -> should.fail()
   }
 
-  root.minimum |> should.equal(Some(0.0))
-  root.maximum |> should.equal(Some(100.0))
+  root.validation.minimum |> should.equal(Some(0.0))
+  root.validation.maximum |> should.equal(Some(100.0))
 }
 
 pub fn parse_string_constraints_test() {
@@ -348,10 +348,10 @@ pub fn parse_string_constraints_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  root.min_length |> should.equal(Some(1))
-  root.max_length |> should.equal(Some(255))
-  root.pattern |> should.equal(Some("^[a-z]+$"))
-  root.format |> should.equal(Some("email"))
+  root.validation.min_length |> should.equal(Some(1))
+  root.validation.max_length |> should.equal(Some(255))
+  root.validation.pattern |> should.equal(Some("^[a-z]+$"))
+  root.validation.format |> should.equal(Some("email"))
 }
 
 pub fn parse_deprecated_flag_test() {
@@ -361,7 +361,7 @@ pub fn parse_deprecated_flag_test() {
   result |> should.be_ok()
 
   let assert Ok(schema_result) = result
-  schema_result.root.deprecated |> should.be_true()
+  schema_result.root.metadata.deprecated |> should.be_true()
 }
 
 pub fn parse_any_of_test() {
@@ -379,7 +379,7 @@ pub fn parse_any_of_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  case root.any_of {
+  case root.structure.any_of {
     Some(variants) -> list.length(variants) |> should.equal(2)
     None -> should.fail()
   }
@@ -400,7 +400,7 @@ pub fn parse_all_of_test() {
   let assert Ok(schema_result) = result
   let root = schema_result.root
 
-  case root.all_of {
+  case root.structure.all_of {
     Some(variants) -> list.length(variants) |> should.equal(2)
     None -> should.fail()
   }

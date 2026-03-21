@@ -6,8 +6,9 @@ import gleeunit/should
 import json_schema_gleam
 import json_schema_gleam/codegen
 import json_schema_gleam/schema.{
-  ArrayType, EnumType, IntegerType, ObjectType, SchemaResult, StringType,
-  StringValue, empty_node,
+  ArrayType, EnumType, IntegerType, ObjectType, SchemaMetadata, SchemaResult,
+  SchemaStructure, StringType, StringValue, empty_metadata, empty_node,
+  empty_structure,
 }
 
 pub fn main() {
@@ -32,11 +33,17 @@ pub fn simple_object_codegen_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("Person"),
-      description: Some("A person record"),
-      properties: dict.from_list([#("name", name_prop), #("age", age_prop)]),
-      required: ["name"],
-      additional_properties: False,
+      metadata: SchemaMetadata(
+        ..empty_metadata("#"),
+        title: Some("Person"),
+        description: Some("A person record"),
+      ),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.from_list([#("name", name_prop), #("age", age_prop)]),
+        required: ["name"],
+        additional_properties: False,
+      ),
     )
 
   let schema_result =
@@ -64,13 +71,19 @@ pub fn enum_codegen_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: schema.EnumType,
-      title: Some("Status"),
-      description: Some("Status values"),
-      enum_values: Some([
-        StringValue("pending"),
-        StringValue("active"),
-        StringValue("completed"),
-      ]),
+      metadata: SchemaMetadata(
+        ..empty_metadata("#"),
+        title: Some("Status"),
+        description: Some("Status values"),
+      ),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        enum_values: Some([
+          StringValue("pending"),
+          StringValue("active"),
+          StringValue("completed"),
+        ]),
+      ),
     )
 
   let schema_result =
@@ -98,11 +111,16 @@ pub fn array_codegen_test() {
 
   let root =
     schema.SchemaNode(
-      ..empty_node("#"),
       schema_type: ArrayType,
-      title: Some("Tags"),
-      items: Some(item_node),
-      unique_items: True,
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Tags")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        items: Some(item_node),
+      ),
+      validation: schema.SchemaValidation(
+        ..schema.empty_validation(),
+        unique_items: True,
+      ),
     )
 
   let schema_result =
@@ -133,10 +151,13 @@ pub fn decoder_generation_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("User"),
-      properties: dict.from_list([#("name", name_prop)]),
-      required: ["name"],
-      additional_properties: False,
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("User")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.from_list([#("name", name_prop)]),
+        required: ["name"],
+        additional_properties: False,
+      ),
     )
 
   let schema_result =
@@ -175,8 +196,8 @@ pub fn dynamic_import_without_decoders_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ArrayType,
-      title: Some("Items"),
-      items: None,
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Items")),
+      structure: SchemaStructure(..empty_structure(), items: None),
     )
 
   let schema_result =
@@ -204,10 +225,16 @@ pub fn multiline_description_comment_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("Thing"),
-      description: Some("Line one\nLine two\nLine three"),
-      properties: dict.new(),
-      required: [],
+      metadata: SchemaMetadata(
+        ..empty_metadata("#"),
+        title: Some("Thing"),
+        description: Some("Line one\nLine two\nLine three"),
+      ),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.new(),
+        required: [],
+      ),
     )
 
   let schema_result =
@@ -235,8 +262,11 @@ pub fn enum_duplicate_constructors_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: EnumType,
-      title: Some("Status"),
-      enum_values: Some([StringValue("foo-bar"), StringValue("foo_bar")]),
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Status")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        enum_values: Some([StringValue("foo-bar"), StringValue("foo_bar")]),
+      ),
     )
 
   let schema_result =
@@ -263,8 +293,11 @@ pub fn enum_digit_prefix_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: EnumType,
-      title: Some("Version"),
-      enum_values: Some([StringValue("1.0"), StringValue("2.0")]),
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Version")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        enum_values: Some([StringValue("1.0"), StringValue("2.0")]),
+      ),
     )
 
   let schema_result =
@@ -293,9 +326,12 @@ pub fn module_name_fallback_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: None,
-      properties: dict.new(),
-      required: [],
+      metadata: SchemaMetadata(..empty_metadata("#"), title: None),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.new(),
+        required: [],
+      ),
     )
 
   let schema_result =
@@ -320,9 +356,12 @@ pub fn module_name_empty_falls_back_to_root_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: None,
-      properties: dict.new(),
-      required: [],
+      metadata: SchemaMetadata(..empty_metadata("#"), title: None),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.new(),
+        required: [],
+      ),
     )
 
   let schema_result =
@@ -349,9 +388,12 @@ pub fn encoder_stub_comment_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("Foo"),
-      properties: dict.new(),
-      required: [],
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Foo")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.new(),
+        required: [],
+      ),
     )
 
   let schema_result =
@@ -388,9 +430,12 @@ pub fn optional_field_decoder_uses_optional_field_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("User"),
-      properties: dict.from_list([#("name", name_prop), #("bio", bio_prop)]),
-      required: ["name"],
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("User")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.from_list([#("name", name_prop), #("bio", bio_prop)]),
+        required: ["name"],
+      ),
     )
 
   let schema_result =
@@ -419,9 +464,12 @@ pub fn empty_object_decoder_validates_dict_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("Empty"),
-      properties: dict.new(),
-      required: [],
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Empty")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.new(),
+        required: [],
+      ),
     )
 
   let schema_result =
@@ -450,26 +498,35 @@ pub fn inline_object_gets_type_name_from_path_test() {
     schema.SchemaNode(
       ..empty_node("#/properties/address"),
       schema_type: ObjectType,
-      title: None,
-      properties: dict.from_list([
-        #(
-          "street",
-          schema.SchemaNode(
-            ..empty_node("#/properties/address/properties/street"),
-            schema_type: StringType,
+      metadata: SchemaMetadata(
+        ..empty_metadata("#/properties/address"),
+        title: None,
+      ),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.from_list([
+          #(
+            "street",
+            schema.SchemaNode(
+              ..empty_node("#/properties/address/properties/street"),
+              schema_type: StringType,
+            ),
           ),
-        ),
-      ]),
-      required: ["street"],
+        ]),
+        required: ["street"],
+      ),
     )
 
   let root =
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("Person"),
-      properties: dict.from_list([#("address", address_prop)]),
-      required: ["address"],
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Person")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.from_list([#("address", address_prop)]),
+        required: ["address"],
+      ),
     )
 
   let schema_result =
@@ -497,26 +554,35 @@ pub fn inline_object_decoder_generated_test() {
     schema.SchemaNode(
       ..empty_node("#/properties/address"),
       schema_type: ObjectType,
-      title: None,
-      properties: dict.from_list([
-        #(
-          "city",
-          schema.SchemaNode(
-            ..empty_node("#/properties/address/properties/city"),
-            schema_type: StringType,
+      metadata: SchemaMetadata(
+        ..empty_metadata("#/properties/address"),
+        title: None,
+      ),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.from_list([
+          #(
+            "city",
+            schema.SchemaNode(
+              ..empty_node("#/properties/address/properties/city"),
+              schema_type: StringType,
+            ),
           ),
-        ),
-      ]),
-      required: ["city"],
+        ]),
+        required: ["city"],
+      ),
     )
 
   let root =
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("Person"),
-      properties: dict.from_list([#("address", address_prop)]),
-      required: ["address"],
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Person")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.from_list([#("address", address_prop)]),
+        required: ["address"],
+      ),
     )
 
   let schema_result =
@@ -544,9 +610,15 @@ pub fn utils_pascal_case_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("my-great-type"),
-      properties: dict.new(),
-      required: [],
+      metadata: SchemaMetadata(
+        ..empty_metadata("#"),
+        title: Some("my-great-type"),
+      ),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.new(),
+        required: [],
+      ),
     )
 
   let schema_result =
@@ -580,9 +652,12 @@ pub fn with_decoders_disables_decoder_generation_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("User"),
-      properties: dict.from_list([#("name", name_prop)]),
-      required: ["name"],
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("User")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.from_list([#("name", name_prop)]),
+        required: ["name"],
+      ),
     )
 
   let schema_result =
@@ -605,9 +680,12 @@ pub fn with_type_prefix_adds_prefix_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: ObjectType,
-      title: Some("Person"),
-      properties: dict.new(),
-      required: [],
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Person")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        properties: dict.new(),
+        required: [],
+      ),
     )
 
   let schema_result =
@@ -649,11 +727,14 @@ pub fn enum_decoder_with_sanitized_constructors_test() {
     schema.SchemaNode(
       ..empty_node("#"),
       schema_type: EnumType,
-      title: Some("Priority"),
-      enum_values: Some([
-        StringValue("foo-bar"),
-        StringValue("foo_bar"),
-      ]),
+      metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Priority")),
+      structure: SchemaStructure(
+        ..empty_structure(),
+        enum_values: Some([
+          StringValue("foo-bar"),
+          StringValue("foo_bar"),
+        ]),
+      ),
     )
 
   let schema_result =

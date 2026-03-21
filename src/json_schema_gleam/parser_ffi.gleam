@@ -13,8 +13,8 @@ import json_schema_gleam/schema.{
   type SchemaValue, AllOfType, AnyOfType, ArrayType, ArrayValue, BoolValue,
   BooleanType, ConstType, EnumType, FileError, FloatValue, IntValue, IntegerType,
   NullType, NullValue, NumberType, ObjectType, ObjectValue, OneOfType,
-  ParseError, RefType, SchemaNode, SchemaResult, StringType, StringValue,
-  UnionType, UnknownType,
+  ParseError, RefType, SchemaMetadata, SchemaNode, SchemaResult, SchemaStructure,
+  SchemaValidation, StringType, StringValue, UnionType, UnknownType,
 }
 
 /// Parse a JSON Schema from a file path
@@ -62,32 +62,47 @@ fn decode_schema_result(dyn: Dynamic) -> Result(SchemaResult, JsonSchemaError) {
 fn get_atom_field(map: Dynamic, key: String) -> Result(Dynamic, Nil)
 
 fn decode_schema_node(dyn: Dynamic) -> SchemaNode {
+  let metadata =
+    SchemaMetadata(
+      path: decode_string_field(dyn, "path", "#"),
+      title: decode_optional_string(dyn, "title"),
+      description: decode_optional_string(dyn, "description"),
+      deprecated: decode_bool_field(dyn, "deprecated", False),
+      default_value: decode_default_value(dyn),
+    )
+
+  let validation =
+    SchemaValidation(
+      pattern: decode_optional_string(dyn, "pattern"),
+      format: decode_optional_string(dyn, "format"),
+      min_length: decode_optional_int(dyn, "min_length"),
+      max_length: decode_optional_int(dyn, "max_length"),
+      minimum: decode_optional_float(dyn, "minimum"),
+      maximum: decode_optional_float(dyn, "maximum"),
+      min_items: decode_optional_int(dyn, "min_items"),
+      max_items: decode_optional_int(dyn, "max_items"),
+      unique_items: decode_bool_field(dyn, "unique_items", False),
+    )
+
+  let structure =
+    SchemaStructure(
+      properties: decode_properties(dyn),
+      required: decode_string_list(dyn, "required"),
+      additional_properties: decode_bool_field(dyn, "additional_properties", True),
+      items: decode_optional_node(dyn, "items"),
+      enum_values: decode_enum_values(dyn),
+      const_value: decode_const_value(dyn),
+      one_of: decode_optional_node_list(dyn, "one_of"),
+      any_of: decode_optional_node_list(dyn, "any_of"),
+      all_of: decode_optional_node_list(dyn, "all_of"),
+      ref: decode_optional_string(dyn, "ref"),
+    )
+
   SchemaNode(
-    path: decode_string_field(dyn, "path", "#"),
     schema_type: decode_schema_type(dyn),
-    title: decode_optional_string(dyn, "title"),
-    description: decode_optional_string(dyn, "description"),
-    properties: decode_properties(dyn),
-    required: decode_string_list(dyn, "required"),
-    additional_properties: decode_bool_field(dyn, "additional_properties", True),
-    items: decode_optional_node(dyn, "items"),
-    enum_values: decode_enum_values(dyn),
-    const_value: decode_const_value(dyn),
-    pattern: decode_optional_string(dyn, "pattern"),
-    default_value: decode_default_value(dyn),
-    one_of: decode_optional_node_list(dyn, "one_of"),
-    any_of: decode_optional_node_list(dyn, "any_of"),
-    all_of: decode_optional_node_list(dyn, "all_of"),
-    ref: decode_optional_string(dyn, "ref"),
-    min_items: decode_optional_int(dyn, "min_items"),
-    max_items: decode_optional_int(dyn, "max_items"),
-    unique_items: decode_bool_field(dyn, "unique_items", False),
-    minimum: decode_optional_float(dyn, "minimum"),
-    maximum: decode_optional_float(dyn, "maximum"),
-    min_length: decode_optional_int(dyn, "min_length"),
-    max_length: decode_optional_int(dyn, "max_length"),
-    format: decode_optional_string(dyn, "format"),
-    deprecated: decode_bool_field(dyn, "deprecated", False),
+    metadata: metadata,
+    validation: validation,
+    structure: structure,
   )
 }
 
