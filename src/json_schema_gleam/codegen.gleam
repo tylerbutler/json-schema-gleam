@@ -5,6 +5,7 @@ import gleam/int
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/string
+import gleam/string_tree.{type StringTree}
 import json_schema_gleam/schema.{
   type SchemaNode, type SchemaResult, type SchemaType, AllOfType, AnyOfType,
   ArrayType, BooleanType, ConstType, EnumType, IntegerType, NullType, NumberType,
@@ -46,15 +47,13 @@ pub fn generate(schema: SchemaResult, options: GenerateOptions) -> String {
     False -> ""
   }
   let encoders = case options.generate_encoders {
-    True -> generate_encoders()
+    True -> string_tree.to_string(generate_encoders())
     False -> ""
   }
 
-  string.join(
-    [imports, "", types, "", decoders, encoders]
-      |> list.filter(fn(s) { s != "" }),
-    "\n",
-  )
+  [imports, "", types, "", decoders, encoders]
+  |> list.filter(fn(s) { s != "" })
+  |> string.join("\n")
 }
 
 fn generate_imports(options: GenerateOptions) -> String {
@@ -107,6 +106,7 @@ fn generate_types(schema: SchemaResult, options: GenerateOptions) -> String {
   [root_type, ..def_types]
   |> list.append(inline_types)
   |> list.append(def_inline_types)
+  |> list.map(string_tree.to_string)
   |> list.filter(fn(s) { s != "" })
   |> list.unique()
   |> string.join("\n\n")
@@ -131,14 +131,14 @@ fn generate_type_from_node(
   node: SchemaNode,
   type_name: String,
   options: GenerateOptions,
-) -> String {
+) -> StringTree {
   case node.schema_type {
     ObjectType -> generate_record_type(node, type_name, options)
     EnumType -> generate_enum_type(node, type_name)
     ArrayType -> generate_array_type_alias(node, type_name, options)
     OneOfType -> generate_union_type(node, type_name, options)
     AnyOfType -> generate_union_type(node, type_name, options)
-    _ -> ""
+    _ -> string_tree.new()
   }
 }
 
@@ -146,15 +146,16 @@ fn generate_record_type(
   node: SchemaNode,
   type_name: String,
   options: GenerateOptions,
-) -> String {
+) -> StringTree {
   let doc = case node.description {
-    Some(desc) -> "/// " <> sanitize_comment(desc) <> "\n"
-    None -> ""
+    Some(desc) ->
+      string_tree.from_string("/// " <> sanitize_comment(desc) <> "\n")
+    None -> string_tree.new()
   }
 
   let deprecated_doc = case node.deprecated {
-    True -> "/// @deprecated\n"
-    False -> ""
+    True -> string_tree.from_string("/// @deprecated\n")
+    False -> string_tree.new()
   }
 
   let properties = dict.to_list(node.properties)
@@ -162,12 +163,12 @@ fn generate_record_type(
   case properties {
     [] ->
       doc
-      <> deprecated_doc
-      <> "pub type "
-      <> type_name
-      <> " {\n  "
-      <> type_name
-      <> "\n}"
+      |> string_tree.append_tree(deprecated_doc)
+      |> string_tree.append("pub type ")
+      |> string_tree.append(type_name)
+      |> string_tree.append(" {\n  ")
+      |> string_tree.append(type_name)
+      |> string_tree.append("\n}")
     _ -> {
       let fields =
         properties
@@ -185,25 +186,26 @@ fn generate_record_type(
         |> string.join("\n")
 
       doc
-      <> deprecated_doc
-      <> "pub type "
-      <> type_name
-      <> " {\n  "
-      <> type_name
-      <> "(\n"
-      <> fields
-      <> "\n  )\n}"
+      |> string_tree.append_tree(deprecated_doc)
+      |> string_tree.append("pub type ")
+      |> string_tree.append(type_name)
+      |> string_tree.append(" {\n  ")
+      |> string_tree.append(type_name)
+      |> string_tree.append("(\n")
+      |> string_tree.append(fields)
+      |> string_tree.append("\n  )\n}")
     }
   }
 }
 
-fn generate_enum_type(node: SchemaNode, type_name: String) -> String {
+fn generate_enum_type(node: SchemaNode, type_name: String) -> StringTree {
   case node.enum_values {
-    None -> ""
+    None -> string_tree.new()
     Some(values) -> {
       let doc = case node.description {
-        Some(desc) -> "/// " <> sanitize_comment(desc) <> "\n"
-        None -> ""
+        Some(desc) ->
+          string_tree.from_string("/// " <> sanitize_comment(desc) <> "\n")
+        None -> string_tree.new()
       }
 
       let string_values =
@@ -234,7 +236,12 @@ fn generate_enum_type(node: SchemaNode, type_name: String) -> String {
           |> string.join("\n")
       }
 
-      doc <> "pub type " <> type_name <> " {\n" <> variants <> "\n}"
+      doc
+      |> string_tree.append("pub type ")
+      |> string_tree.append(type_name)
+      |> string_tree.append(" {\n")
+      |> string_tree.append(variants)
+      |> string_tree.append("\n}")
     }
   }
 }
@@ -243,13 +250,20 @@ fn generate_array_type_alias(
   node: SchemaNode,
   type_name: String,
   options: GenerateOptions,
-) -> String {
+) -> StringTree {
   case node.items {
     Some(items_node) -> {
       let item_type = node_to_gleam_type(items_node, options)
-      "pub type " <> type_name <> " =\n  List(" <> item_type <> ")"
+      string_tree.from_string("pub type ")
+      |> string_tree.append(type_name)
+      |> string_tree.append(" =\n  List(")
+      |> string_tree.append(item_type)
+      |> string_tree.append(")")
     }
-    None -> "pub type " <> type_name <> " =\n  List(Dynamic)"
+    None ->
+      string_tree.from_string("pub type ")
+      |> string_tree.append(type_name)
+      |> string_tree.append(" =\n  List(Dynamic)")
   }
 }
 
@@ -257,7 +271,7 @@ fn generate_union_type(
   node: SchemaNode,
   type_name: String,
   options: GenerateOptions,
-) -> String {
+) -> StringTree {
   let variants = case node.one_of {
     Some(nodes) -> nodes
     None ->
@@ -268,11 +282,12 @@ fn generate_union_type(
   }
 
   case variants {
-    [] -> ""
+    [] -> string_tree.new()
     _ -> {
       let doc = case node.description {
-        Some(desc) -> "/// " <> sanitize_comment(desc) <> "\n"
-        None -> ""
+        Some(desc) ->
+          string_tree.from_string("/// " <> sanitize_comment(desc) <> "\n")
+        None -> string_tree.new()
       }
 
       let variant_defs =
@@ -287,7 +302,12 @@ fn generate_union_type(
         })
         |> string.join("\n")
 
-      doc <> "pub type " <> type_name <> " {\n" <> variant_defs <> "\n}"
+      doc
+      |> string_tree.append("pub type ")
+      |> string_tree.append(type_name)
+      |> string_tree.append(" {\n")
+      |> string_tree.append(variant_defs)
+      |> string_tree.append("\n}")
     }
   }
 }
@@ -392,6 +412,7 @@ fn generate_decoders(schema: SchemaResult, options: GenerateOptions) -> String {
   [root_decoder, ..def_decoders]
   |> list.append(inline_decoders)
   |> list.append(def_inline_decoders)
+  |> list.map(string_tree.to_string)
   |> list.filter(fn(s) { s != "" })
   |> list.unique()
   |> string.join("\n\n")
@@ -401,11 +422,11 @@ fn generate_decoder_for_node(
   node: SchemaNode,
   type_name: String,
   options: GenerateOptions,
-) -> String {
+) -> StringTree {
   case node.schema_type {
     ObjectType -> generate_object_decoder(node, type_name, options)
     EnumType -> generate_enum_decoder(node, type_name)
-    _ -> ""
+    _ -> string_tree.new()
   }
 }
 
@@ -413,19 +434,21 @@ fn generate_object_decoder(
   node: SchemaNode,
   type_name: String,
   options: GenerateOptions,
-) -> String {
+) -> StringTree {
   let fn_name = utils.snake_case(type_name) <> "_decoder"
   let properties = dict.to_list(node.properties)
 
   case properties {
     [] ->
-      "pub fn "
-      <> fn_name
-      <> "(dyn: Dynamic) -> Result("
-      <> type_name
-      <> ", List(dynamic.DecodeError)) {\n  use _ <- result.try(dynamic.dict(dynamic.string, dynamic.dynamic)(dyn))\n  Ok("
-      <> type_name
-      <> ")\n}"
+      string_tree.from_string("pub fn ")
+      |> string_tree.append(fn_name)
+      |> string_tree.append("(dyn: Dynamic) -> Result(")
+      |> string_tree.append(type_name)
+      |> string_tree.append(
+        ", List(dynamic.DecodeError)) {\n  use _ <- result.try(dynamic.dict(dynamic.string, dynamic.dynamic)(dyn))\n  Ok(",
+      )
+      |> string_tree.append(type_name)
+      |> string_tree.append(")\n}")
     _ -> {
       let field_decoders =
         properties
@@ -441,7 +464,11 @@ fn generate_object_decoder(
             options,
           )
         })
-        |> string.join("\n")
+
+      let field_decoders_sb =
+        field_decoders
+        |> list.intersperse(string_tree.from_string("\n"))
+        |> string_tree.concat()
 
       let constructor_args =
         properties
@@ -451,17 +478,17 @@ fn generate_object_decoder(
         })
         |> string.join(", ")
 
-      "pub fn "
-      <> fn_name
-      <> "(dyn: Dynamic) -> Result("
-      <> type_name
-      <> ", List(dynamic.DecodeError)) {\n"
-      <> field_decoders
-      <> "\n  Ok("
-      <> type_name
-      <> "("
-      <> constructor_args
-      <> "))\n}"
+      string_tree.from_string("pub fn ")
+      |> string_tree.append(fn_name)
+      |> string_tree.append("(dyn: Dynamic) -> Result(")
+      |> string_tree.append(type_name)
+      |> string_tree.append(", List(dynamic.DecodeError)) {\n")
+      |> string_tree.append_tree(field_decoders_sb)
+      |> string_tree.append("\n  Ok(")
+      |> string_tree.append(type_name)
+      |> string_tree.append("(")
+      |> string_tree.append(constructor_args)
+      |> string_tree.append("))\n}")
     }
   }
 }
@@ -472,26 +499,26 @@ fn generate_field_decoder(
   node: SchemaNode,
   is_required: Bool,
   options: GenerateOptions,
-) -> String {
+) -> StringTree {
   let decoder = gleam_decoder_for_type(node, options)
 
   case is_required {
     True ->
-      "  use "
-      <> field_name
-      <> " <- result.try(dynamic.field(\""
-      <> json_name
-      <> "\", "
-      <> decoder
-      <> ")(dyn))"
+      string_tree.from_string("  use ")
+      |> string_tree.append(field_name)
+      |> string_tree.append(" <- result.try(dynamic.field(\"")
+      |> string_tree.append(json_name)
+      |> string_tree.append("\", ")
+      |> string_tree.append(decoder)
+      |> string_tree.append(")(dyn))")
     False ->
-      "  use "
-      <> field_name
-      <> " <- result.try(dynamic.optional_field(\""
-      <> json_name
-      <> "\", "
-      <> decoder
-      <> ")(dyn))"
+      string_tree.from_string("  use ")
+      |> string_tree.append(field_name)
+      |> string_tree.append(" <- result.try(dynamic.optional_field(\"")
+      |> string_tree.append(json_name)
+      |> string_tree.append("\", ")
+      |> string_tree.append(decoder)
+      |> string_tree.append(")(dyn))")
   }
 }
 
@@ -532,11 +559,11 @@ fn gleam_decoder_for_type(node: SchemaNode, options: GenerateOptions) -> String 
   }
 }
 
-fn generate_enum_decoder(node: SchemaNode, type_name: String) -> String {
+fn generate_enum_decoder(node: SchemaNode, type_name: String) -> StringTree {
   let fn_name = utils.snake_case(type_name) <> "_decoder"
 
   case node.enum_values {
-    None -> ""
+    None -> string_tree.new()
     Some(values) -> {
       let string_values =
         values
@@ -550,7 +577,7 @@ fn generate_enum_decoder(node: SchemaNode, type_name: String) -> String {
       let all_strings = list.length(string_values) == list.length(values)
 
       case all_strings {
-        False -> ""
+        False -> string_tree.new()
         True -> {
           let sanitized =
             string_values
@@ -566,23 +593,29 @@ fn generate_enum_decoder(node: SchemaNode, type_name: String) -> String {
             })
             |> string.join("\n")
 
-          "pub fn "
-          <> fn_name
-          <> "(dyn: Dynamic) -> Result("
-          <> type_name
-          <> ", List(dynamic.DecodeError)) {\n  case dynamic.string(dyn) {\n    Ok(s) -> case s {\n"
-          <> cases
-          <> "\n      _ -> Error([dynamic.DecodeError(expected: \""
-          <> type_name
-          <> "\", found: s, path: [])])\n    }\n    Error(e) -> Error(e)\n  }\n}"
+          string_tree.from_string("pub fn ")
+          |> string_tree.append(fn_name)
+          |> string_tree.append("(dyn: Dynamic) -> Result(")
+          |> string_tree.append(type_name)
+          |> string_tree.append(
+            ", List(dynamic.DecodeError)) {\n  case dynamic.string(dyn) {\n    Ok(s) -> case s {\n",
+          )
+          |> string_tree.append(cases)
+          |> string_tree.append(
+            "\n      _ -> Error([dynamic.DecodeError(expected: \"",
+          )
+          |> string_tree.append(type_name)
+          |> string_tree.append(
+            "\", found: s, path: [])])\n    }\n    Error(e) -> Error(e)\n  }\n}",
+          )
         }
       }
     }
   }
 }
 
-fn generate_encoders() -> String {
-  "// TODO: Encoder generation is not yet implemented"
+fn generate_encoders() -> StringTree {
+  string_tree.from_string("// TODO: Encoder generation is not yet implemented")
 }
 
 // Helper functions
@@ -730,7 +763,7 @@ fn derive_type_name_from_path(path: String) -> Result(String, Nil) {
 fn collect_inline_types(
   node: SchemaNode,
   options: GenerateOptions,
-) -> List(String) {
+) -> List(StringTree) {
   node.properties
   |> dict.to_list()
   |> list.flat_map(fn(pair) {
@@ -761,7 +794,7 @@ fn collect_inline_types(
 fn collect_inline_decoders(
   node: SchemaNode,
   options: GenerateOptions,
-) -> List(String) {
+) -> List(StringTree) {
   node.properties
   |> dict.to_list()
   |> list.flat_map(fn(pair) {
