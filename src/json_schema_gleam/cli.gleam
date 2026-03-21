@@ -8,6 +8,7 @@ import gleam/string
 import glint
 import json_schema_gleam/codegen
 import json_schema_gleam/parser_ffi
+import json_schema_gleam/utils
 import simplifile
 
 /// Run the CLI with command line arguments
@@ -50,8 +51,7 @@ fn generate_command() -> glint.Command(Nil) {
       list.first(args)
       |> result.replace_error("No schema file specified"),
     )
-    let output_path =
-      args |> list.drop(1) |> list.first |> option.from_result()
+    let output_path = args |> list.drop(1) |> list.first |> option.from_result()
     let options =
       codegen.GenerateOptions(
         module_name: get_module_name(module_flag, schema_path),
@@ -105,6 +105,5 @@ fn derive_module_name(path: String) -> String {
   |> list.last()
   |> result.unwrap("")
   |> string.replace(".json", "")
-  |> string.replace("-", "_")
-  |> string.lowercase()
+  |> utils.snake_case()
 }
