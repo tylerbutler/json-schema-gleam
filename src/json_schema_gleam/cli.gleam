@@ -45,21 +45,26 @@ fn generate_command() -> glint.Command(Nil) {
   let no_decoders_flag = no_decoders(flags)
   let prefix_flag = prefix(flags)
 
-  case args {
-    [] -> io.println("Error: No schema file specified")
-    [schema_path, ..rest] -> {
-      let output_path = list.first(rest) |> option.from_result()
-
-      let options =
-        codegen.GenerateOptions(
-          module_name: get_module_name(module_flag, schema_path),
-          generate_decoders: !result.unwrap(no_decoders_flag, False),
-          generate_encoders: False,
-          type_prefix: result.unwrap(prefix_flag, ""),
-        )
-
-      handle_generate(schema_path, output_path, options)
-    }
+  let result = {
+    use schema_path <- result.try(
+      list.first(args)
+      |> result.replace_error("No schema file specified"),
+    )
+    let output_path =
+      args |> list.drop(1) |> list.first |> option.from_result()
+    let options =
+      codegen.GenerateOptions(
+        module_name: get_module_name(module_flag, schema_path),
+        generate_decoders: !result.unwrap(no_decoders_flag, False),
+        generate_encoders: False,
+        type_prefix: result.unwrap(prefix_flag, ""),
+      )
+    use code <- result.try(generate_code(schema_path, options))
+    write_output(code, output_path)
+  }
+  case result {
+    Ok(msg) -> io.println(msg)
+    Error(e) -> io.println("Error: " <> e)
   }
 }
 
@@ -73,22 +78,16 @@ fn get_module_name(
   }
 }
 
-fn handle_generate(
-  schema_path: String,
+fn write_output(
+  code: String,
   output_path: option.Option(String),
-  options: codegen.GenerateOptions,
-) -> Nil {
-  case generate_code(schema_path, options) {
-    Error(e) -> io.println("Error: " <> e)
-    Ok(code) ->
-      case output_path {
-        None -> io.println(code)
-        Some(path) ->
-          case simplifile.write(path, code) {
-            Ok(_) -> io.println("Generated types written to " <> path)
-            Error(e) -> io.println("Error writing file: " <> string.inspect(e))
-          }
-      }
+) -> Result(String, String) {
+  case output_path {
+    None -> Ok(code)
+    Some(path) ->
+      simplifile.write(path, code)
+      |> result.replace("Generated types written to " <> path)
+      |> result.map_error(fn(e) { "Error writing file: " <> string.inspect(e) })
   }
 }
 
