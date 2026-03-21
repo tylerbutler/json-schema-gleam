@@ -75,6 +75,25 @@ pub type SchemaValue {
   ObjectValue(Dict(String, SchemaValue))
 }
 
+/// Structured error type for JSON Schema operations
+pub type JsonSchemaError {
+  /// Error reading or accessing a file
+  FileError(path: String, detail: String)
+  /// Error parsing JSON or JSON Schema
+  ParseError(detail: String)
+  /// Error during code generation
+  CodegenError(detail: String)
+}
+
+/// Convert a JsonSchemaError to a human-readable string
+pub fn error_to_string(error: JsonSchemaError) -> String {
+  case error {
+    FileError(path, detail) -> "File error (" <> path <> "): " <> detail
+    ParseError(detail) -> "Parse error: " <> detail
+    CodegenError(detail) -> "Codegen error: " <> detail
+  }
+}
+
 /// Create an empty schema node (useful for building test schemas)
 pub fn empty_node(path: String) -> SchemaNode {
   SchemaNode(

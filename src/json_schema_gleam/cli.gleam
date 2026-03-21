@@ -8,6 +8,7 @@ import gleam/string
 import glint
 import json_schema_gleam/codegen
 import json_schema_gleam/parser_ffi
+import json_schema_gleam/schema
 import json_schema_gleam/utils
 import simplifile
 
@@ -46,7 +47,7 @@ fn generate_command() -> glint.Command(Nil) {
   let no_decoders_flag = no_decoders(flags)
   let prefix_flag = prefix(flags)
 
-  let result = {
+  let cli_result = {
     use schema_path <- result.try(
       list.first(args)
       |> result.replace_error("No schema file specified"),
@@ -59,10 +60,13 @@ fn generate_command() -> glint.Command(Nil) {
         generate_encoders: False,
         type_prefix: result.unwrap(prefix_flag, ""),
       )
-    use code <- result.try(generate_code(schema_path, options))
+    use code <- result.try(
+      generate_code(schema_path, options)
+      |> result.map_error(schema.error_to_string),
+    )
     write_output(code, output_path)
   }
-  case result {
+  case cli_result {
     Ok(msg) -> io.println(msg)
     Error(e) -> io.println("Error: " <> e)
   }
@@ -94,9 +98,9 @@ fn write_output(
 fn generate_code(
   schema_path: String,
   options: codegen.GenerateOptions,
-) -> Result(String, String) {
-  use schema <- result.try(parser_ffi.parse_file(schema_path))
-  Ok(codegen.generate(schema, options))
+) -> Result(String, schema.JsonSchemaError) {
+  use parsed <- result.try(parser_ffi.parse_file(schema_path))
+  Ok(codegen.generate(parsed, options))
 }
 
 fn derive_module_name(path: String) -> String {

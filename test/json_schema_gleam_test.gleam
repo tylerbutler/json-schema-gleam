@@ -567,6 +567,83 @@ pub fn utils_pascal_case_test() {
 
 // ---- Issue #4: Enum decoder with sanitized constructors ----
 
+// ---- Issue #19: Builder-style option configuration ----
+
+pub fn with_decoders_disables_decoder_generation_test() {
+  let name_prop =
+    schema.SchemaNode(
+      ..empty_node("#/properties/name"),
+      schema_type: StringType,
+    )
+
+  let root =
+    schema.SchemaNode(
+      ..empty_node("#"),
+      schema_type: ObjectType,
+      title: Some("User"),
+      properties: dict.from_list([#("name", name_prop)]),
+      required: ["name"],
+    )
+
+  let schema_result =
+    SchemaResult(root: root, definitions: dict.new(), errors: [], warnings: [])
+
+  let options =
+    json_schema_gleam.default_options("user")
+    |> json_schema_gleam.with_decoders(False)
+
+  let code = codegen.generate(schema_result, options)
+
+  // Type should still be generated
+  code |> string.contains("pub type User") |> should.be_true()
+  // Decoder should NOT be generated
+  code |> string.contains("pub fn user_decoder") |> should.be_false()
+}
+
+pub fn with_type_prefix_adds_prefix_test() {
+  let root =
+    schema.SchemaNode(
+      ..empty_node("#"),
+      schema_type: ObjectType,
+      title: Some("Person"),
+      properties: dict.new(),
+      required: [],
+    )
+
+  let schema_result =
+    SchemaResult(root: root, definitions: dict.new(), errors: [], warnings: [])
+
+  let options =
+    json_schema_gleam.default_options("person")
+    |> json_schema_gleam.with_type_prefix("Schema")
+
+  let code = codegen.generate(schema_result, options)
+
+  code |> string.contains("pub type SchemaPerson") |> should.be_true()
+}
+
+pub fn with_module_name_changes_module_test() {
+  let options =
+    json_schema_gleam.default_options("original")
+    |> json_schema_gleam.with_module_name("renamed")
+
+  options.module_name |> should.equal("renamed")
+}
+
+pub fn builder_chain_pattern_test() {
+  let options =
+    json_schema_gleam.default_options("my_types")
+    |> json_schema_gleam.with_type_prefix("Schema")
+    |> json_schema_gleam.with_decoders(False)
+    |> json_schema_gleam.with_encoders(True)
+    |> json_schema_gleam.with_module_name("custom")
+
+  options.module_name |> should.equal("custom")
+  options.generate_decoders |> should.be_false()
+  options.generate_encoders |> should.be_true()
+  options.type_prefix |> should.equal("Schema")
+}
+
 pub fn enum_decoder_with_sanitized_constructors_test() {
   let root =
     schema.SchemaNode(

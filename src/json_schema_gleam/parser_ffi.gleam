@@ -9,22 +9,25 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import json_schema_gleam/schema.{
-  type SchemaNode, type SchemaResult, type SchemaType, type SchemaValue,
-  AllOfType, AnyOfType, ArrayType, ArrayValue, BoolValue, BooleanType, ConstType,
-  EnumType, FloatValue, IntValue, IntegerType, NullType, NullValue, NumberType,
-  ObjectType, ObjectValue, OneOfType, RefType, SchemaNode, SchemaResult,
-  StringType, StringValue, UnionType, UnknownType,
+  type JsonSchemaError, type SchemaNode, type SchemaResult, type SchemaType,
+  type SchemaValue, AllOfType, AnyOfType, ArrayType, ArrayValue, BoolValue,
+  BooleanType, ConstType, EnumType, FileError, FloatValue, IntValue, IntegerType,
+  NullType, NullValue, NumberType, ObjectType, ObjectValue, OneOfType,
+  ParseError, RefType, SchemaNode, SchemaResult, StringType, StringValue,
+  UnionType, UnknownType,
 }
 
 /// Parse a JSON Schema from a file path
-pub fn parse_file(path: String) -> Result(SchemaResult, String) {
+pub fn parse_file(path: String) -> Result(SchemaResult, JsonSchemaError) {
   do_parse_file(path)
+  |> result.map_error(fn(e) { FileError(path: path, detail: e) })
   |> result.try(decode_schema_result)
 }
 
 /// Parse a JSON Schema from a JSON string
-pub fn parse_string(json: String) -> Result(SchemaResult, String) {
+pub fn parse_string(json: String) -> Result(SchemaResult, JsonSchemaError) {
   do_parse_string(json)
+  |> result.map_error(fn(e) { ParseError(detail: e) })
   |> result.try(decode_schema_result)
 }
 
@@ -35,7 +38,9 @@ fn do_parse_file(path: String) -> Result(Dynamic, String)
 fn do_parse_string(json: String) -> Result(Dynamic, String)
 
 /// Decode the dynamic result from Elixir into typed Gleam structures
-fn decode_schema_result(dyn: Dynamic) -> Result(SchemaResult, String) {
+fn decode_schema_result(
+  dyn: Dynamic,
+) -> Result(SchemaResult, JsonSchemaError) {
   case get_atom_field(dyn, "root"), get_atom_field(dyn, "definitions") {
     Ok(root_dyn), Ok(defs_dyn) ->
       Ok(
@@ -47,10 +52,10 @@ fn decode_schema_result(dyn: Dynamic) -> Result(SchemaResult, String) {
         ),
       )
     _, _ ->
-      Error(
-        "Failed to decode schema result structure. Got: "
-        <> dynamic.classify(dyn),
-      )
+      Error(ParseError(
+        detail: "Failed to decode schema result structure. Got: "
+          <> dynamic.classify(dyn),
+      ))
   }
 }
 
