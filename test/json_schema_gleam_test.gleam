@@ -113,10 +113,7 @@ pub fn array_codegen_test() {
     schema.SchemaNode(
       schema_type: ArrayType,
       metadata: SchemaMetadata(..empty_metadata("#"), title: Some("Tags")),
-      structure: SchemaStructure(
-        ..empty_structure(),
-        items: Some(item_node),
-      ),
+      structure: SchemaStructure(..empty_structure(), items: Some(item_node)),
       validation: schema.SchemaValidation(
         ..schema.empty_validation(),
         unique_items: True,

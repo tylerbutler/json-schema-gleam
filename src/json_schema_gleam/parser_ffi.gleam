@@ -88,7 +88,11 @@ fn decode_schema_node(dyn: Dynamic) -> SchemaNode {
     SchemaStructure(
       properties: decode_properties(dyn),
       required: decode_string_list(dyn, "required"),
-      additional_properties: decode_bool_field(dyn, "additional_properties", True),
+      additional_properties: decode_bool_field(
+        dyn,
+        "additional_properties",
+        True,
+      ),
       items: decode_optional_node(dyn, "items"),
       enum_values: decode_enum_values(dyn),
       const_value: decode_const_value(dyn),

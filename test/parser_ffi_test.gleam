@@ -136,7 +136,8 @@ pub fn parse_nested_object_file_test() {
   }
 
   // Check nested address property
-  let assert Ok(address_prop) = dict.get(root.structure.properties, "shipping_address")
+  let assert Ok(address_prop) =
+    dict.get(root.structure.properties, "shipping_address")
   case address_prop.schema_type {
     ObjectType -> should.be_true(True)
     _ -> should.fail()
